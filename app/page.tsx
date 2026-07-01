@@ -14,17 +14,9 @@ const wallTileSizes = [
   "직접입력",
 ] as const;
 
-const floorTileSizes = [
-  "300×300",
-  "300×600",
-  "600×600",
-  "600×1200",
-  "800×800",
-  "900×900",
-  "직접입력",
-] as const;
-
 const lossRates = ["5%", "10%", "15%", "20%"] as const;
+
+const tileManufacturers = ["기본", "동화", "윤현", "대보", "기타"] as const;
 
 const accessoryRates = [
   { name: "드라이픽스", rate: 0.7286, unit: "포" },
@@ -38,6 +30,7 @@ type TileSize = (typeof wallTileSizes)[number];
 type TileKind = "벽타일" | "바닥타일";
 type InputMethod = "면적 입력" | "치수 입력" | "길이 입력";
 type LossRate = (typeof lossRates)[number];
+type TileManufacturer = (typeof tileManufacturers)[number];
 type RegisteredTileSize = Exclude<TileSize, "직접입력">;
 
 type TileSpec = {
@@ -53,24 +46,40 @@ type CalculationResult = {
   lossAppliedArea: number;
   requiredTiles: number;
   requiredBoxes: number;
+  orderBoxes: number;
 };
 
-type InputError = "area" | "width" | "height" | "length";
+type InputError =
+  | "area"
+  | "width"
+  | "height"
+  | "length"
+  | "customTileWidth"
+  | "customTileHeight"
+  | "customBoxTiles";
 
 type SavedCalculation = {
   id: number;
   workArea: WorkArea;
   tileKind: TileKind;
+  tileManufacturer: TileManufacturer;
   tileSize: TileSize;
+  tileDisplayName: string;
   inputMethod: InputMethod;
   areaSquareMeter: string;
   widthMillimeter: string;
   heightMillimeter: string;
   lengthMillimeter: string;
+  customTileWidthMillimeter: string;
+  customTileHeightMillimeter: string;
+  customBoxTiles: string;
   lossRate: LossRate;
   constructionArea: number;
   lossAppliedArea: number;
+  requiredTiles: number;
+  recommendedBoxes: number;
   requiredBoxes: number;
+  actualOrderArea: number;
   totalOrderQuantity: number;
 };
 
@@ -119,6 +128,14 @@ const tileSpecs: Record<RegisteredTileSize, TileSpec> = {
   },
 };
 
+const manufacturerTileSizes: Record<TileManufacturer, readonly TileSize[]> = {
+  기본: wallTileSizes,
+  동화: ["300×300", "300×600", "600×600", "600×1200", "800×800"],
+  윤현: ["600×600", "600×1200", "800×800"],
+  대보: ["300×300", "300×600", "600×600", "600×1200", "900×900"],
+  기타: wallTileSizes,
+};
+
 function getButtonClass(isActive: boolean) {
   return [
     "min-h-12 rounded-md border px-4 py-3 text-sm font-semibold transition-colors sm:text-base",
@@ -160,9 +177,17 @@ function formatSquareMeter(value: number) {
     : value.toFixed(2).replace(/\.?0+$/, "");
 }
 
+function formatTileDimension(value: number) {
+  return Number.isInteger(value)
+    ? value.toString()
+    : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
 export default function Home() {
   const [selectedArea, setSelectedArea] = useState<WorkArea>("욕실");
   const [selectedTileKind, setSelectedTileKind] = useState<TileKind>("벽타일");
+  const [selectedTileManufacturer, setSelectedTileManufacturer] =
+    useState<TileManufacturer>("기본");
   const [selectedWallTile, setSelectedWallTile] = useState<TileSize>("300×600");
   const [selectedFloorTile, setSelectedFloorTile] = useState<TileSize>("300×300");
   const [inputMethod, setInputMethod] = useState<InputMethod>("면적 입력");
@@ -170,6 +195,9 @@ export default function Home() {
   const [widthMillimeter, setWidthMillimeter] = useState("");
   const [heightMillimeter, setHeightMillimeter] = useState("");
   const [lengthMillimeter, setLengthMillimeter] = useState("");
+  const [customTileWidthMillimeter, setCustomTileWidthMillimeter] = useState("");
+  const [customTileHeightMillimeter, setCustomTileHeightMillimeter] = useState("");
+  const [customBoxTiles, setCustomBoxTiles] = useState("");
   const [selectedLossRate, setSelectedLossRate] = useState<LossRate>("10%");
   const [calculationResult, setCalculationResult] =
     useState<CalculationResult | null>(null);
@@ -182,8 +210,45 @@ export default function Home() {
 
   const selectedTileSize =
     selectedTileKind === "벽타일" ? selectedWallTile : selectedFloorTile;
+  const availableTileSizes = manufacturerTileSizes[selectedTileManufacturer];
   const selectedTileSpec =
     selectedTileSize === "직접입력" ? null : tileSpecs[selectedTileSize];
+  const customTileWidth = parseInputValue(customTileWidthMillimeter);
+  const customTileHeight = parseInputValue(customTileHeightMillimeter);
+  const customBoxTileCount = parseInputValue(customBoxTiles);
+  const customTileDisplayName =
+    selectedTileSize === "직접입력" &&
+    isValidPositiveInput(customTileWidthMillimeter) &&
+    isValidPositiveInput(customTileHeightMillimeter)
+      ? `${formatTileDimension(customTileWidth)}×${formatTileDimension(
+          customTileHeight,
+        )}`
+      : "직접입력";
+  const customTileSpec =
+    selectedTileSize === "직접입력" &&
+    isValidPositiveInput(customTileWidthMillimeter) &&
+    isValidPositiveInput(customTileHeightMillimeter) &&
+    isValidPositiveInput(customBoxTiles)
+      ? {
+          width: customTileWidth,
+          height: customTileHeight,
+          tileArea: (customTileWidth * customTileHeight) / 1_000_000,
+          boxTiles: customBoxTileCount,
+          boxArea:
+            ((customTileWidth * customTileHeight) / 1_000_000) *
+            customBoxTileCount,
+        }
+      : null;
+  const calculationTileSpec = selectedTileSpec ?? customTileSpec;
+  const selectedTileDisplayName =
+    selectedTileSize === "직접입력" ? customTileDisplayName : selectedTileSize;
+  const orderBoxes = calculationResult?.orderBoxes ?? 0;
+  const totalOrderQuantity = calculationTileSpec
+    ? orderBoxes * calculationTileSpec.boxTiles
+    : 0;
+  const actualOrderArea = calculationTileSpec
+    ? orderBoxes * calculationTileSpec.boxArea
+    : 0;
   const canSelectInputMethod =
     selectedArea === "욕실" || selectedArea === "베란다" || selectedArea === "기타";
   const heightLabel = selectedArea === "주방벽" ? "높이(mm)" : "세로(mm)";
@@ -212,20 +277,118 @@ export default function Home() {
     );
   }
 
+  function setSelectedTileSize(size: TileSize) {
+    if (selectedTileKind === "벽타일") {
+      setSelectedWallTile(size);
+      return;
+    }
+
+    setSelectedFloorTile(size);
+  }
+
+  function getSavedTileDisplayName(calculation: SavedCalculation) {
+    if (calculation.tileDisplayName) {
+      return calculation.tileDisplayName;
+    }
+
+    if (
+      calculation.tileSize === "직접입력" &&
+      isValidPositiveInput(calculation.customTileWidthMillimeter) &&
+      isValidPositiveInput(calculation.customTileHeightMillimeter)
+    ) {
+      return `${formatTileDimension(
+        parseInputValue(calculation.customTileWidthMillimeter),
+      )}×${formatTileDimension(
+        parseInputValue(calculation.customTileHeightMillimeter),
+      )}`;
+    }
+
+    return calculation.tileSize;
+  }
+
+  function getSavedTileSpec(calculation: SavedCalculation) {
+    if (calculation.tileSize !== "직접입력") {
+      return tileSpecs[calculation.tileSize];
+    }
+
+    if (
+      isValidPositiveInput(calculation.customTileWidthMillimeter) &&
+      isValidPositiveInput(calculation.customTileHeightMillimeter) &&
+      isValidPositiveInput(calculation.customBoxTiles)
+    ) {
+      const width = parseInputValue(calculation.customTileWidthMillimeter);
+      const height = parseInputValue(calculation.customTileHeightMillimeter);
+      const boxTiles = parseInputValue(calculation.customBoxTiles);
+      const tileArea = (width * height) / 1_000_000;
+
+      return {
+        width,
+        height,
+        tileArea,
+        boxTiles,
+        boxArea: tileArea * boxTiles,
+      };
+    }
+
+    return null;
+  }
+
+  function getSavedActualOrderArea(calculation: SavedCalculation) {
+    if (calculation.actualOrderArea) {
+      return calculation.actualOrderArea;
+    }
+
+    const savedTileSpec = getSavedTileSpec(calculation);
+
+    return savedTileSpec ? calculation.requiredBoxes * savedTileSpec.boxArea : 0;
+  }
+
+  function handleOrderBoxesChange(value: string) {
+    if (!calculationResult) {
+      return;
+    }
+
+    const nextOrderBoxes = Math.max(1, Math.floor(parseInputValue(value)));
+
+    setCalculationResult({
+      ...calculationResult,
+      orderBoxes: nextOrderBoxes,
+    });
+  }
+
   function handleAreaSelect(area: WorkArea) {
     resetCalculationResult();
     setSelectedArea(area);
     setInputMethod(getDefaultInputMethod(area));
   }
 
-  function handleCalculate() {
-    if (!selectedTileSpec) {
-      setCalculationResult(null);
-      setIsResultStale(false);
-      return;
-    }
+  function handleManufacturerSelect(manufacturer: TileManufacturer) {
+    resetCalculationResult();
+    setSelectedTileManufacturer(manufacturer);
 
-    const nextInputErrors: InputError[] =
+    const nextTileSizes = manufacturerTileSizes[manufacturer];
+
+    if (!nextTileSizes.includes(selectedTileSize)) {
+      setSelectedTileSize(nextTileSizes[0]);
+    }
+  }
+
+  function handleCalculate() {
+    const tileSpecErrors: InputError[] =
+      selectedTileSize === "직접입력"
+        ? [
+            ...(isValidPositiveInput(customTileWidthMillimeter)
+              ? []
+              : ["customTileWidth" as const]),
+            ...(isValidPositiveInput(customTileHeightMillimeter)
+              ? []
+              : ["customTileHeight" as const]),
+            ...(isValidPositiveInput(customBoxTiles)
+              ? []
+              : ["customBoxTiles" as const]),
+          ]
+        : [];
+    const areaInputErrors: InputError[] =
       inputMethod === "면적 입력"
         ? isValidPositiveInput(areaSquareMeter)
           ? []
@@ -240,9 +403,19 @@ export default function Home() {
           : isValidPositiveInput(lengthMillimeter)
             ? []
             : ["length"];
+    const nextInputErrors: InputError[] = [
+      ...tileSpecErrors,
+      ...areaInputErrors,
+    ];
 
     if (nextInputErrors.length > 0) {
       setInputErrors(nextInputErrors);
+      setCalculationResult(null);
+      setIsResultStale(false);
+      return;
+    }
+
+    if (!calculationTileSpec) {
       setCalculationResult(null);
       setIsResultStale(false);
       return;
@@ -259,35 +432,36 @@ export default function Home() {
         ? area
         : inputMethod === "치수 입력"
           ? (width * height) / 1_000_000
-          : (length * selectedTileSpec.height) / 1_000_000;
+          : (length * calculationTileSpec.height) / 1_000_000;
     const lossRate = parseInputValue(selectedLossRate.replace("%", "")) / 100;
     const lossAppliedArea = constructionArea * (1 + lossRate);
+    const requiredBoxes = Math.ceil(lossAppliedArea / calculationTileSpec.boxArea);
 
     setCalculationResult({
       constructionArea,
       lossAppliedArea,
-      requiredTiles: Math.ceil(lossAppliedArea / selectedTileSpec.tileArea),
-      requiredBoxes: Math.ceil(lossAppliedArea / selectedTileSpec.boxArea),
+      requiredTiles: Math.ceil(lossAppliedArea / calculationTileSpec.tileArea),
+      requiredBoxes,
+      orderBoxes: requiredBoxes,
     });
     setIsResultStale(false);
   }
 
   async function handleCopyOrderSummary() {
-    if (!calculationResult || !selectedTileSpec) {
+    if (!calculationResult || !calculationTileSpec) {
       return;
     }
 
     try {
       const orderSummary = [
         `시공부위: ${selectedArea}`,
-        `타일규격: ${selectedTileSize}`,
+        `타일규격: ${selectedTileDisplayName}`,
         "",
         `시공면적: ${calculationResult.constructionArea.toFixed(2)}㎡`,
         `로스적용면적: ${calculationResult.lossAppliedArea.toFixed(2)}㎡`,
-        `발주박스: ${calculationResult.requiredBoxes}박스`,
-        `총발주수량: ${
-          calculationResult.requiredBoxes * selectedTileSpec.boxTiles
-        }장`,
+        `발주박스: ${orderBoxes}박스`,
+        `총발주수량: ${totalOrderQuantity}장`,
+        `실제발주면적: ${actualOrderArea.toFixed(2)}㎡`,
         "",
         "부자재 참고 계산",
         ...accessoryRates.map(
@@ -318,10 +492,13 @@ export default function Home() {
         (calculation, index) =>
           [
             `${index + 1}. ${calculation.workArea}`,
-            `   타일규격: ${calculation.tileSize}`,
+            `   타일규격: ${getSavedTileDisplayName(calculation)}`,
             `   시공면적: ${formatSquareMeter(calculation.constructionArea)}㎡`,
             `   발주박스: ${calculation.requiredBoxes}박스`,
             `   총발주수량: ${calculation.totalOrderQuantity}장`,
+            `   실제발주면적: ${formatSquareMeter(
+              getSavedActualOrderArea(calculation),
+            )}㎡`,
           ].join("\n"),
       );
       const accessorySummary = accessoryRates.map(
@@ -354,7 +531,7 @@ export default function Home() {
   }
 
   function handleSaveCalculation() {
-    if (!calculationResult || !selectedTileSpec) {
+    if (!calculationResult || !calculationTileSpec) {
       return;
     }
 
@@ -372,26 +549,36 @@ export default function Home() {
           id: nextId,
           workArea: selectedArea,
           tileKind: selectedTileKind,
+          tileManufacturer: selectedTileManufacturer,
           tileSize: selectedTileSize,
+          tileDisplayName: selectedTileDisplayName,
           inputMethod,
           areaSquareMeter,
           widthMillimeter,
           heightMillimeter,
           lengthMillimeter,
+          customTileWidthMillimeter,
+          customTileHeightMillimeter,
+          customBoxTiles,
           lossRate: selectedLossRate,
           constructionArea: calculationResult.constructionArea,
           lossAppliedArea: calculationResult.lossAppliedArea,
-          requiredBoxes: calculationResult.requiredBoxes,
-          totalOrderQuantity:
-            calculationResult.requiredBoxes * selectedTileSpec.boxTiles,
+          requiredTiles: calculationResult.requiredTiles,
+          recommendedBoxes: calculationResult.requiredBoxes,
+          requiredBoxes: orderBoxes,
+          actualOrderArea,
+          totalOrderQuantity,
         },
       ];
     });
   }
 
   function handleEditSavedCalculation(calculation: SavedCalculation) {
+    const savedTileSpec = getSavedTileSpec(calculation);
+
     setSelectedArea(calculation.workArea);
     setSelectedTileKind(calculation.tileKind);
+    setSelectedTileManufacturer(calculation.tileManufacturer ?? "기본");
 
     if (calculation.tileKind === "벽타일") {
       setSelectedWallTile(calculation.tileSize);
@@ -404,9 +591,26 @@ export default function Home() {
     setWidthMillimeter(calculation.widthMillimeter);
     setHeightMillimeter(calculation.heightMillimeter);
     setLengthMillimeter(calculation.lengthMillimeter);
+    setCustomTileWidthMillimeter(calculation.customTileWidthMillimeter);
+    setCustomTileHeightMillimeter(calculation.customTileHeightMillimeter);
+    setCustomBoxTiles(calculation.customBoxTiles);
     setSelectedLossRate(calculation.lossRate);
-    setCalculationResult(null);
-    setIsResultStale(true);
+    setCalculationResult(
+      savedTileSpec
+        ? {
+            constructionArea: calculation.constructionArea,
+            lossAppliedArea: calculation.lossAppliedArea,
+            requiredTiles:
+              calculation.requiredTiles ??
+              Math.ceil(calculation.lossAppliedArea / savedTileSpec.tileArea),
+            requiredBoxes:
+              calculation.recommendedBoxes ??
+              Math.ceil(calculation.lossAppliedArea / savedTileSpec.boxArea),
+            orderBoxes: calculation.requiredBoxes,
+          }
+        : null,
+    );
+    setIsResultStale(!savedTileSpec);
     setInputErrors([]);
   }
 
@@ -484,6 +688,17 @@ export default function Home() {
                 onClick={() => {
                   resetCalculationResult();
                   setSelectedTileKind(kind);
+
+                  const nextSelectedTile =
+                    kind === "벽타일" ? selectedWallTile : selectedFloorTile;
+
+                  if (!availableTileSizes.includes(nextSelectedTile)) {
+                    if (kind === "벽타일") {
+                      setSelectedWallTile(availableTileSizes[0]);
+                    } else {
+                      setSelectedFloorTile(availableTileSizes[0]);
+                    }
+                  }
                 }}
                 aria-pressed={selectedTileKind === kind}
               >
@@ -493,9 +708,28 @@ export default function Home() {
           </div>
 
           <div className="mt-6">
+            <p className="text-base font-bold text-zinc-900">제조사</p>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {tileManufacturers.map((manufacturer) => (
+                <button
+                  key={manufacturer}
+                  type="button"
+                  className={getButtonClass(
+                    selectedTileManufacturer === manufacturer,
+                  )}
+                  onClick={() => handleManufacturerSelect(manufacturer)}
+                  aria-pressed={selectedTileManufacturer === manufacturer}
+                >
+                  {manufacturer}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6">
             <p className="text-base font-bold text-zinc-900">{selectedTileKind}</p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {(selectedTileKind === "벽타일" ? wallTileSizes : floorTileSizes).map(
+              {availableTileSizes.map(
                 (size) => (
                   <button
                     key={size}
@@ -503,13 +737,7 @@ export default function Home() {
                     className={getButtonClass(selectedTileSize === size)}
                     onClick={() => {
                       resetCalculationResult();
-
-                      if (selectedTileKind === "벽타일") {
-                        setSelectedWallTile(size);
-                        return;
-                      }
-
-                      setSelectedFloorTile(size);
+                      setSelectedTileSize(size);
                     }}
                     aria-pressed={selectedTileSize === size}
                   >
@@ -549,9 +777,126 @@ export default function Home() {
                 </div>
               </dl>
             ) : (
-              <p className="text-sm leading-6 text-zinc-600">
-                직접입력 선택 시 규격 데이터를 별도로 입력합니다.
-              </p>
+              <div className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label
+                      htmlFor="custom-tile-width"
+                      className="text-sm font-bold text-zinc-800"
+                    >
+                      타일 가로(mm)
+                    </label>
+                    <input
+                      id="custom-tile-width"
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      value={customTileWidthMillimeter}
+                      onChange={(event) => {
+                        resetCalculationResult();
+                        clearInputError("customTileWidth");
+                        setCustomTileWidthMillimeter(event.target.value);
+                      }}
+                      placeholder="예: 400"
+                      className="mt-2 h-12 w-full rounded-md border border-zinc-200 bg-white px-4 text-base text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    />
+                    {inputErrors.includes("customTileWidth") ? (
+                      <p className="mt-2 text-sm font-semibold text-red-600">
+                        올바른 값을 입력해주세요
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="custom-tile-height"
+                      className="text-sm font-bold text-zinc-800"
+                    >
+                      타일 세로(mm)
+                    </label>
+                    <input
+                      id="custom-tile-height"
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      value={customTileHeightMillimeter}
+                      onChange={(event) => {
+                        resetCalculationResult();
+                        clearInputError("customTileHeight");
+                        setCustomTileHeightMillimeter(event.target.value);
+                      }}
+                      placeholder="예: 800"
+                      className="mt-2 h-12 w-full rounded-md border border-zinc-200 bg-white px-4 text-base text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    />
+                    {inputErrors.includes("customTileHeight") ? (
+                      <p className="mt-2 text-sm font-semibold text-red-600">
+                        올바른 값을 입력해주세요
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="custom-box-tiles"
+                      className="text-sm font-bold text-zinc-800"
+                    >
+                      박스당 수량(장)
+                    </label>
+                    <input
+                      id="custom-box-tiles"
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      value={customBoxTiles}
+                      onChange={(event) => {
+                        resetCalculationResult();
+                        clearInputError("customBoxTiles");
+                        setCustomBoxTiles(event.target.value);
+                      }}
+                      placeholder="예: 4"
+                      className="mt-2 h-12 w-full rounded-md border border-zinc-200 bg-white px-4 text-base text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    />
+                    {inputErrors.includes("customBoxTiles") ? (
+                      <p className="mt-2 text-sm font-semibold text-red-600">
+                        올바른 값을 입력해주세요
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <dl className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md bg-white p-4">
+                    <dt className="text-xs font-semibold text-zinc-500">
+                      타일 1매 면적
+                    </dt>
+                    <dd className="mt-2 text-lg font-bold text-zinc-950">
+                      {customTileSpec
+                        ? `${formatSquareMeter(customTileSpec.tileArea)}㎡`
+                        : "-"}
+                    </dd>
+                  </div>
+                  <div className="rounded-md bg-white p-4">
+                    <dt className="text-xs font-semibold text-zinc-500">
+                      박스당 수량
+                    </dt>
+                    <dd className="mt-2 text-lg font-bold text-zinc-950">
+                      {customTileSpec
+                        ? `${formatSquareMeter(customTileSpec.boxTiles)}매`
+                        : "-"}
+                    </dd>
+                  </div>
+                  <div className="rounded-md bg-white p-4">
+                    <dt className="text-xs font-semibold text-zinc-500">
+                      박스당 면적
+                    </dt>
+                    <dd className="mt-2 text-lg font-bold text-zinc-950">
+                      {customTileSpec
+                        ? `${formatSquareMeter(customTileSpec.boxArea)}㎡`
+                        : "-"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
             )}
           </div>
         </section>
@@ -784,6 +1129,14 @@ export default function Home() {
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-md bg-white p-4">
                   <dt className="text-xs font-semibold text-zinc-500">
+                    타일규격
+                  </dt>
+                  <dd className="mt-2 text-lg font-bold text-zinc-950">
+                    {selectedTileDisplayName}
+                  </dd>
+                </div>
+                <div className="rounded-md bg-white p-4">
+                  <dt className="text-xs font-semibold text-zinc-500">
                     시공 면적
                   </dt>
                   <dd className="mt-2 text-lg font-bold text-zinc-950">
@@ -808,20 +1161,38 @@ export default function Home() {
                 </div>
                 <div className="rounded-md bg-white p-4">
                   <dt className="text-xs font-semibold text-zinc-500">
-                    발주 박스 수량(박스)
+                    추천 발주 박스 수량(박스)
                   </dt>
                   <dd className="mt-2 text-lg font-bold text-zinc-950">
                     {calculationResult.requiredBoxes}박스
                   </dd>
                 </div>
-                {selectedTileSpec ? (
+                {calculationTileSpec ? (
                   <>
                     <div className="rounded-md bg-white p-4">
                       <dt className="text-xs font-semibold text-zinc-500">
                         박스당 수량(장)
                       </dt>
                       <dd className="mt-2 text-lg font-bold text-zinc-950">
-                        {selectedTileSpec.boxTiles}장
+                        {calculationTileSpec.boxTiles}장
+                      </dd>
+                    </div>
+                    <div className="rounded-md bg-white p-4">
+                      <dt className="text-xs font-semibold text-zinc-500">
+                        발주 박스 수량(박스)
+                      </dt>
+                      <dd className="mt-2">
+                        <input
+                          id="order-boxes"
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={orderBoxes}
+                          onChange={(event) =>
+                            handleOrderBoxesChange(event.target.value)
+                          }
+                          className="h-11 w-full rounded-md border border-zinc-200 bg-white px-3 text-lg font-bold text-zinc-950 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        />
                       </dd>
                     </div>
                     <div className="rounded-md bg-white p-4">
@@ -829,9 +1200,15 @@ export default function Home() {
                         총 발주 수량(장)
                       </dt>
                       <dd className="mt-2 text-lg font-bold text-zinc-950">
-                        {calculationResult.requiredBoxes *
-                          selectedTileSpec.boxTiles}
-                        장
+                        {totalOrderQuantity}장
+                      </dd>
+                    </div>
+                    <div className="rounded-md bg-white p-4">
+                      <dt className="text-xs font-semibold text-zinc-500">
+                        실제 발주면적
+                      </dt>
+                      <dd className="mt-2 text-lg font-bold text-zinc-950">
+                        {actualOrderArea.toFixed(2)}㎡
                       </dd>
                     </div>
                   </>
@@ -843,9 +1220,9 @@ export default function Home() {
                 <br />
                 다시 계산하기를 눌러주세요.
               </p>
-            ) : !selectedTileSpec ? (
+            ) : selectedTileSize === "직접입력" && !calculationTileSpec ? (
               <p className="text-sm font-semibold leading-6 text-zinc-700">
-                직접입력 규격은 준비중입니다
+                직접입력 규격을 입력한 뒤 계산하기를 눌러주세요.
               </p>
             ) : (
               <p className="text-sm leading-6 text-zinc-600">
@@ -884,7 +1261,7 @@ export default function Home() {
             </div>
           ) : null}
 
-          {calculationResult && selectedTileSpec ? (
+          {calculationResult && calculationTileSpec ? (
             <div className="mt-5 rounded-md border border-sky-200 bg-white p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -920,7 +1297,7 @@ export default function Home() {
                     타일규격
                   </dt>
                   <dd className="text-sm font-bold text-zinc-950">
-                    {selectedTileSize}
+                    {selectedTileDisplayName}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
@@ -944,7 +1321,7 @@ export default function Home() {
                     발주박스
                   </dt>
                   <dd className="text-sm font-bold text-zinc-950">
-                    {calculationResult.requiredBoxes}박스
+                    {orderBoxes}박스
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
@@ -952,16 +1329,22 @@ export default function Home() {
                     총발주수량
                   </dt>
                   <dd className="text-sm font-bold text-zinc-950">
-                    {calculationResult.requiredBoxes *
-                      selectedTileSpec.boxTiles}
-                    장
+                    {totalOrderQuantity}장
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                  <dt className="text-sm font-semibold text-zinc-500">
+                    실제발주면적
+                  </dt>
+                  <dd className="text-sm font-bold text-zinc-950">
+                    {actualOrderArea.toFixed(2)}㎡
                   </dd>
                 </div>
               </dl>
             </div>
           ) : null}
 
-          {calculationResult && selectedTileSpec ? (
+          {calculationResult && calculationTileSpec ? (
             <button
               type="button"
               onClick={handleSaveCalculation}
@@ -1004,7 +1387,8 @@ export default function Home() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <h3 className="text-base font-bold text-zinc-950">
-                          {calculation.workArea} / {calculation.tileSize}
+                          {calculation.workArea} /{" "}
+                          {getSavedTileDisplayName(calculation)}
                         </h3>
                         <p className="mt-1 text-sm text-zinc-500">
                           발주박스 {calculation.requiredBoxes}박스 · 총발주수량{" "}
@@ -1045,7 +1429,7 @@ export default function Home() {
                           타일규격
                         </dt>
                         <dd className="text-sm font-bold text-zinc-950">
-                          {calculation.tileSize}
+                          {getSavedTileDisplayName(calculation)}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
@@ -1078,6 +1462,14 @@ export default function Home() {
                         </dt>
                         <dd className="text-sm font-bold text-zinc-950">
                           {calculation.totalOrderQuantity}장
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
+                        <dt className="text-sm font-semibold text-zinc-500">
+                          실제발주면적
+                        </dt>
+                        <dd className="text-sm font-bold text-zinc-950">
+                          {getSavedActualOrderArea(calculation).toFixed(2)}㎡
                         </dd>
                       </div>
                     </dl>
