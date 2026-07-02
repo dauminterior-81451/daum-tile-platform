@@ -18,12 +18,30 @@ const lossRates = ["5%", "10%", "15%", "20%"] as const;
 
 const tileManufacturers = ["기본", "동화", "윤현", "대보", "기타"] as const;
 
-const accessoryRates = [
-  { name: "드라이픽스", rate: 0.7286, unit: "포" },
-  { name: "에폭시", rate: 0.2619, unit: "조" },
-  { name: "줄눈제", rate: 0.0857, unit: "포" },
-  { name: "실리콘", rate: 0.1048, unit: "개" },
+const constructionMethods = ["철거", "덧방"] as const;
+
+const adhesiveRates = {
+  dryFix: {
+    name: "드라이픽스",
+    demolitionRate: 0.75,
+    overlayRate: 0.38,
+    unit: "포",
+  },
+  epoxy: {
+    name: "에폭시",
+    demolitionRate: 0.27,
+    overlayRate: 0.225,
+    unit: "조",
+    minimum: 0.3,
+  },
+} as const;
+
+const commonAccessoryRates = [
+  { name: "줄눈제", rate: 0.1, unit: "포" },
+  { name: "실리콘", rate: 0.12, unit: "개", minimum: 0.2 },
 ] as const;
+
+const cerafixRate = { rate: 0.225, unit: "통", minimum: 0.3 } as const;
 
 type WorkArea = (typeof workAreas)[number];
 type TileSize = (typeof wallTileSizes)[number];
@@ -31,6 +49,7 @@ type TileKind = "벽타일" | "바닥타일";
 type InputMethod = "면적 입력" | "치수 입력" | "길이 입력";
 type LossRate = (typeof lossRates)[number];
 type TileManufacturer = (typeof tileManufacturers)[number];
+type ConstructionMethod = (typeof constructionMethods)[number];
 type RegisteredTileSize = Exclude<TileSize, "직접입력">;
 
 type TileSpec = {
@@ -65,6 +84,7 @@ type SavedCalculation = {
   tileManufacturer: TileManufacturer;
   tileSize: TileSize;
   tileDisplayName: string;
+  constructionMethod: ConstructionMethod;
   inputMethod: InputMethod;
   areaSquareMeter: string;
   widthMillimeter: string;
@@ -199,6 +219,8 @@ export default function Home() {
   const [customTileHeightMillimeter, setCustomTileHeightMillimeter] = useState("");
   const [customBoxTiles, setCustomBoxTiles] = useState("");
   const [selectedLossRate, setSelectedLossRate] = useState<LossRate>("10%");
+  const [selectedConstructionMethod, setSelectedConstructionMethod] =
+    useState<ConstructionMethod>("철거");
   const [calculationResult, setCalculationResult] =
     useState<CalculationResult | null>(null);
   const [isResultStale, setIsResultStale] = useState(false);
@@ -273,6 +295,114 @@ export default function Home() {
     (total, calculation) => total + calculation.constructionArea,
     0,
   );
+  const savedOverlayConstructionArea = savedCalculations.reduce(
+    (total, calculation) =>
+      total + (calculation.constructionMethod === "덧방"
+        ? calculation.constructionArea
+        : 0),
+    0,
+  );
+  const savedDemolitionConstructionArea =
+    savedTotalConstructionArea - savedOverlayConstructionArea;
+
+  function getAccessoryQuantity(
+    constructionArea: number,
+    accessory: { rate: number; unit: string; minimum?: number },
+  ) {
+    const quantity = constructionArea * accessory.rate;
+    const displayQuantity =
+      accessory.minimum && quantity > 0
+        ? Math.max(quantity, accessory.minimum)
+        : quantity;
+
+    return `${displayQuantity.toFixed(1)}${accessory.unit}`;
+  }
+
+  function getMethodAccessoryQuantity(
+    constructionMethod: ConstructionMethod,
+    constructionArea: number,
+    accessory: {
+      demolitionRate: number;
+      overlayRate: number;
+      unit: string;
+      minimum?: number;
+    },
+  ) {
+    return getAccessoryQuantity(constructionArea, {
+      rate:
+        constructionMethod === "덧방"
+          ? accessory.overlayRate
+          : accessory.demolitionRate,
+      unit: accessory.unit,
+      minimum: accessory.minimum,
+    });
+  }
+
+  function getCombinedMethodAccessoryQuantity(
+    demolitionArea: number,
+    overlayArea: number,
+    accessory: {
+      demolitionRate: number;
+      overlayRate: number;
+      unit: string;
+      minimum?: number;
+    },
+  ) {
+    const demolitionQuantity = demolitionArea * accessory.demolitionRate;
+    const overlayQuantity = overlayArea * accessory.overlayRate;
+    const displayQuantity =
+      (accessory.minimum && demolitionQuantity > 0
+        ? Math.max(demolitionQuantity, accessory.minimum)
+        : demolitionQuantity) +
+      (accessory.minimum && overlayQuantity > 0
+        ? Math.max(overlayQuantity, accessory.minimum)
+        : overlayQuantity);
+
+    return `${displayQuantity.toFixed(1)}${accessory.unit}`;
+  }
+
+  function getCerafixStatus(constructionMethod: ConstructionMethod) {
+    return constructionMethod === "덧방" ? "덧방·선택" : "철거 시 불가";
+  }
+
+  function getCerafixDisplay(constructionMethod: ConstructionMethod, area: number) {
+    return constructionMethod === "덧방"
+      ? `${getCerafixStatus(constructionMethod)} (${getAccessoryQuantity(
+          area,
+          cerafixRate,
+        )})`
+      : getCerafixStatus(constructionMethod);
+  }
+
+  function getConstructionMethodGuide() {
+    return "벽 접착제는 드라이픽스 또는 에폭시 중 택일하여 사용합니다.";
+  }
+
+  function getAccessorySummaryLines(
+    constructionMethod: ConstructionMethod,
+    constructionArea: number,
+  ) {
+    return [
+      `${constructionMethod} 벽 접착제`,
+      `${adhesiveRates.dryFix.name}: ${getMethodAccessoryQuantity(
+        constructionMethod,
+        constructionArea,
+        adhesiveRates.dryFix,
+      )}`,
+      `또는 ${adhesiveRates.epoxy.name}: ${getMethodAccessoryQuantity(
+        constructionMethod,
+        constructionArea,
+        adhesiveRates.epoxy,
+      )}`,
+      "",
+      "공통 부자재",
+      ...commonAccessoryRates.map(
+        (accessory) =>
+          `${accessory.name}: ${getAccessoryQuantity(constructionArea, accessory)}`,
+      ),
+      `세라픽스: ${getCerafixDisplay(constructionMethod, constructionArea)}`,
+    ];
+  }
 
   function resetCalculationResult() {
     setCalculationResult(null);
@@ -465,6 +595,7 @@ export default function Home() {
       const orderSummary = [
         `시공부위: ${selectedArea}`,
         `타일규격: ${selectedTileDisplayName}`,
+        `시공기준: ${selectedConstructionMethod}`,
         "",
         `시공면적: ${calculationResult.constructionArea.toFixed(2)}㎡`,
         `로스적용면적: ${calculationResult.lossAppliedArea.toFixed(2)}㎡`,
@@ -473,14 +604,13 @@ export default function Home() {
         `실제발주면적: ${actualOrderArea.toFixed(2)}㎡`,
         "",
         "부자재 참고 계산",
-        ...accessoryRates.map(
-          (accessory) =>
-            `${accessory.name}: ${(
-              calculationResult.constructionArea * accessory.rate
-            ).toFixed(1)}${accessory.unit}`,
+        ...getAccessorySummaryLines(
+          selectedConstructionMethod,
+          calculationResult.constructionArea,
         ),
         "",
-        "※ 부자재 수량은 참고용입니다.",
+        `※ ${getConstructionMethodGuide()}`,
+        "※ 부자재 수량은 시공면적 기준 참고용입니다.",
       ].join("\n");
 
       await navigator.clipboard.writeText(orderSummary);
@@ -502,18 +632,46 @@ export default function Home() {
           [
             `${index + 1}. ${calculation.workArea}`,
             `   타일규격: ${getSavedTileDisplayName(calculation)}`,
+            `   시공기준: ${calculation.constructionMethod}`,
             `   시공면적: ${formatSquareMeter(calculation.constructionArea)}㎡`,
             `   발주박스: ${calculation.requiredBoxes}박스`,
             `   총발주수량: ${calculation.totalOrderQuantity}장`,
             `   실제발주면적: ${formatSquareMeter(
               getSavedActualOrderArea(calculation),
             )}㎡`,
+            `   세라픽스: ${getCerafixDisplay(
+              calculation.constructionMethod,
+              calculation.constructionArea,
+            )}`,
           ].join("\n"),
       );
-      const accessorySummary = accessoryRates.map(
-        (accessory) =>
-          `${accessory.name}: ${(savedTotalConstructionArea * accessory.rate).toFixed(1)}${accessory.unit}`,
-      );
+      const accessorySummary = [
+        `${adhesiveRates.dryFix.name}: ${getCombinedMethodAccessoryQuantity(
+          savedDemolitionConstructionArea,
+          savedOverlayConstructionArea,
+          adhesiveRates.dryFix,
+        )}`,
+        `또는 ${adhesiveRates.epoxy.name}: ${getCombinedMethodAccessoryQuantity(
+          savedDemolitionConstructionArea,
+          savedOverlayConstructionArea,
+          adhesiveRates.epoxy,
+        )}`,
+        ...commonAccessoryRates.map(
+          (accessory) =>
+            `${accessory.name}: ${getAccessoryQuantity(
+              savedTotalConstructionArea,
+              accessory,
+            )}`,
+        ),
+        `세라픽스: ${
+          savedOverlayConstructionArea > 0
+            ? `${getCerafixStatus("덧방")} (${getAccessoryQuantity(
+                savedOverlayConstructionArea,
+                cerafixRate,
+              )})`
+            : "철거 시 불가"
+        }`,
+      ];
       const savedOrderSummary = [
         "[다움 타일 발주]",
         "",
@@ -528,7 +686,7 @@ export default function Home() {
         "",
         accessorySummary.join("\n"),
         "",
-        "※ 저장된 계산 목록 전체 기준",
+        "※ 저장된 계산 목록 전체 시공면적 기준",
       ].join("\n");
 
       await navigator.clipboard.writeText(savedOrderSummary);
@@ -561,6 +719,7 @@ export default function Home() {
           tileManufacturer: selectedTileManufacturer,
           tileSize: selectedTileSize,
           tileDisplayName: selectedTileDisplayName,
+          constructionMethod: selectedConstructionMethod,
           inputMethod,
           areaSquareMeter,
           widthMillimeter,
@@ -604,6 +763,7 @@ export default function Home() {
     setCustomTileHeightMillimeter(calculation.customTileHeightMillimeter);
     setCustomBoxTiles(calculation.customBoxTiles);
     setSelectedLossRate(calculation.lossRate);
+    setSelectedConstructionMethod(calculation.constructionMethod ?? "철거");
     setCalculationResult(
       savedTileSpec
         ? {
@@ -1283,11 +1443,60 @@ export default function Home() {
 
           {calculationResult ? (
             <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4">
-              <h3 className="text-base font-bold text-zinc-950">
-                부자재 참고 계산
-              </h3>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-950">
+                    부자재 참고 계산 - {selectedConstructionMethod}
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-zinc-600">
+                    {getConstructionMethodGuide()}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-md bg-white p-1.5 sm:w-48">
+                  {constructionMethods.map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      className={[
+                        "rounded-md px-3 py-2 text-sm font-bold transition-colors",
+                        selectedConstructionMethod === method
+                          ? "bg-amber-500 text-white shadow-sm"
+                          : "text-zinc-600 hover:bg-amber-50 hover:text-zinc-900",
+                      ].join(" ")}
+                      onClick={() => setSelectedConstructionMethod(method)}
+                      aria-pressed={selectedConstructionMethod === method}
+                    >
+                      {method}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {accessoryRates.map((accessory) => (
+                <div className="rounded-md bg-white px-4 py-3">
+                  <dt className="text-sm font-semibold text-zinc-500">
+                    드라이픽스
+                  </dt>
+                  <dd className="mt-2 text-lg font-bold text-zinc-950">
+                    {getMethodAccessoryQuantity(
+                      selectedConstructionMethod,
+                      calculationResult.constructionArea,
+                      adhesiveRates.dryFix,
+                    )}
+                  </dd>
+                </div>
+                <div className="rounded-md bg-white px-4 py-3">
+                  <dt className="text-sm font-semibold text-zinc-500">
+                    또는 에폭시
+                  </dt>
+                  <dd className="mt-2 text-lg font-bold text-zinc-950">
+                    {getMethodAccessoryQuantity(
+                      selectedConstructionMethod,
+                      calculationResult.constructionArea,
+                      adhesiveRates.epoxy,
+                    )}
+                  </dd>
+                </div>
+                {commonAccessoryRates.map((accessory) => (
                   <div
                     key={accessory.name}
                     className="rounded-md bg-white px-4 py-3"
@@ -1296,13 +1505,24 @@ export default function Home() {
                       {accessory.name}
                     </dt>
                     <dd className="mt-2 text-lg font-bold text-zinc-950">
-                      {(
-                        calculationResult.constructionArea * accessory.rate
-                      ).toFixed(1)}
-                      {accessory.unit}
+                      {getAccessoryQuantity(
+                        calculationResult.constructionArea,
+                        accessory,
+                      )}
                     </dd>
                   </div>
                 ))}
+                <div className="rounded-md bg-white px-4 py-3">
+                  <dt className="text-sm font-semibold text-zinc-500">
+                    세라픽스
+                  </dt>
+                  <dd className="mt-2 text-lg font-bold text-zinc-950">
+                    {getCerafixDisplay(
+                      selectedConstructionMethod,
+                      calculationResult.constructionArea,
+                    )}
+                  </dd>
+                </div>
               </dl>
               <p className="mt-4 text-sm leading-6 text-zinc-600">
                 부자재 수량은 실제 발주면적이 아닌 시공면적 기준 참고값입니다.
@@ -1349,6 +1569,14 @@ export default function Home() {
                   </dt>
                   <dd className="text-sm font-bold text-zinc-950">
                     {selectedTileDisplayName}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                  <dt className="text-sm font-semibold text-zinc-500">
+                    시공기준
+                  </dt>
+                  <dd className="text-sm font-bold text-zinc-950">
+                    {selectedConstructionMethod}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
@@ -1442,6 +1670,7 @@ export default function Home() {
                           {getSavedTileDisplayName(calculation)}
                         </h3>
                         <p className="mt-1 text-sm text-zinc-500">
+                          {calculation.constructionMethod} ·{" "}
                           발주박스 {calculation.requiredBoxes}박스 · 총발주수량{" "}
                           {calculation.totalOrderQuantity}장
                         </p>
@@ -1485,6 +1714,14 @@ export default function Home() {
                       </div>
                       <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
                         <dt className="text-sm font-semibold text-zinc-500">
+                          시공기준
+                        </dt>
+                        <dd className="text-sm font-bold text-zinc-950">
+                          {calculation.constructionMethod}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
+                        <dt className="text-sm font-semibold text-zinc-500">
                           시공면적
                         </dt>
                         <dd className="text-sm font-bold text-zinc-950">
@@ -1523,6 +1760,17 @@ export default function Home() {
                           {getSavedActualOrderArea(calculation).toFixed(2)}㎡
                         </dd>
                       </div>
+                      <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
+                        <dt className="text-sm font-semibold text-zinc-500">
+                          세라픽스
+                        </dt>
+                        <dd className="text-sm font-bold text-zinc-950">
+                          {getCerafixDisplay(
+                            calculation.constructionMethod,
+                            calculation.constructionArea,
+                          )}
+                        </dd>
+                      </div>
                     </dl>
                   </article>
                 ))}
@@ -1552,7 +1800,31 @@ export default function Home() {
                   전체 부자재 요약
                 </h3>
                 <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {accessoryRates.map((accessory) => (
+                  <div className="rounded-md bg-white px-4 py-3">
+                    <dt className="text-sm font-semibold text-zinc-500">
+                      드라이픽스
+                    </dt>
+                    <dd className="mt-2 text-lg font-bold text-zinc-950">
+                      {getCombinedMethodAccessoryQuantity(
+                        savedDemolitionConstructionArea,
+                        savedOverlayConstructionArea,
+                        adhesiveRates.dryFix,
+                      )}
+                    </dd>
+                  </div>
+                  <div className="rounded-md bg-white px-4 py-3">
+                    <dt className="text-sm font-semibold text-zinc-500">
+                      또는 에폭시
+                    </dt>
+                    <dd className="mt-2 text-lg font-bold text-zinc-950">
+                      {getCombinedMethodAccessoryQuantity(
+                        savedDemolitionConstructionArea,
+                        savedOverlayConstructionArea,
+                        adhesiveRates.epoxy,
+                      )}
+                    </dd>
+                  </div>
+                  {commonAccessoryRates.map((accessory) => (
                     <div
                       key={accessory.name}
                       className="rounded-md bg-white px-4 py-3"
@@ -1561,14 +1833,29 @@ export default function Home() {
                         {accessory.name}
                       </dt>
                       <dd className="mt-2 text-lg font-bold text-zinc-950">
-                        {(savedTotalConstructionArea * accessory.rate).toFixed(1)}
-                        {accessory.unit}
+                        {getAccessoryQuantity(
+                          savedTotalConstructionArea,
+                          accessory,
+                        )}
                       </dd>
                     </div>
                   ))}
+                  <div className="rounded-md bg-white px-4 py-3">
+                    <dt className="text-sm font-semibold text-zinc-500">
+                      세라픽스
+                    </dt>
+                    <dd className="mt-2 text-lg font-bold text-zinc-950">
+                      {savedOverlayConstructionArea > 0
+                        ? `${getCerafixStatus("덧방")} (${getAccessoryQuantity(
+                            savedOverlayConstructionArea,
+                            cerafixRate,
+                          )})`
+                        : "철거 시 불가"}
+                    </dd>
+                  </div>
                 </dl>
                 <p className="mt-4 text-sm font-semibold text-amber-800">
-                  ※ 저장된 계산 목록 전체 기준
+                  ※ 저장된 계산 목록 전체 시공면적 기준
                 </p>
               </div>
 
