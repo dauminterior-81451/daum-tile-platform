@@ -287,8 +287,8 @@ export default function Home() {
     (total, calculation) => total + calculation.requiredBoxes,
     0,
   );
-  const savedTotalOrderQuantity = savedCalculations.reduce(
-    (total, calculation) => total + calculation.totalOrderQuantity,
+  const savedTotalActualOrderArea = savedCalculations.reduce(
+    (total, calculation) => total + getSavedActualOrderArea(calculation),
     0,
   );
   const savedTotalConstructionArea = savedCalculations.reduce(
@@ -593,15 +593,15 @@ export default function Home() {
 
     try {
       const orderSummary = [
+        `발주박스: ${orderBoxes}박스`,
+        `추천박스: ${calculationResult.requiredBoxes}박스`,
+        `실제발주면적: ${actualOrderArea.toFixed(2)}㎡`,
+        "",
         `시공부위: ${selectedArea}`,
         `타일규격: ${selectedTileDisplayName}`,
         `시공기준: ${selectedConstructionMethod}`,
-        "",
         `시공면적: ${calculationResult.constructionArea.toFixed(2)}㎡`,
         `로스적용면적: ${calculationResult.lossAppliedArea.toFixed(2)}㎡`,
-        `발주박스: ${orderBoxes}박스`,
-        `총발주수량: ${totalOrderQuantity}장`,
-        `실제발주면적: ${actualOrderArea.toFixed(2)}㎡`,
         "",
         "부자재 참고 계산",
         ...getAccessorySummaryLines(
@@ -630,14 +630,16 @@ export default function Home() {
       const savedOrderItems = savedCalculations.map(
         (calculation, index) =>
           [
-            `${index + 1}. ${calculation.workArea}`,
+            `${index + 1}. 발주박스: ${calculation.requiredBoxes}박스`,
+            `   실제발주면적: ${formatSquareMeter(
+              getSavedActualOrderArea(calculation),
+            )}㎡`,
+            `   시공부위: ${calculation.workArea}`,
             `   타일규격: ${getSavedTileDisplayName(calculation)}`,
             `   시공기준: ${calculation.constructionMethod}`,
             `   시공면적: ${formatSquareMeter(calculation.constructionArea)}㎡`,
-            `   발주박스: ${calculation.requiredBoxes}박스`,
-            `   총발주수량: ${calculation.totalOrderQuantity}장`,
-            `   실제발주면적: ${formatSquareMeter(
-              getSavedActualOrderArea(calculation),
+            `   로스적용면적: ${formatSquareMeter(
+              calculation.lossAppliedArea,
             )}㎡`,
             `   세라픽스: ${getCerafixDisplay(
               calculation.constructionMethod,
@@ -679,8 +681,8 @@ export default function Home() {
         "",
         "---",
         "",
-        `총 박스 수량: ${savedTotalBoxes}박스`,
-        `총 발주 수량: ${savedTotalOrderQuantity}장`,
+        `총 발주 박스: ${savedTotalBoxes}박스`,
+        `총 실제발주면적: ${formatSquareMeter(savedTotalActualOrderArea)}㎡`,
         "",
         "전체 부자재 요약",
         "",
@@ -1358,14 +1360,6 @@ export default function Home() {
                   <>
                     <div className="rounded-md bg-white p-4">
                       <dt className="text-xs font-semibold text-zinc-500">
-                        총 발주 수량
-                      </dt>
-                      <dd className="mt-2 text-lg font-bold text-zinc-950">
-                        {totalOrderQuantity}장
-                      </dd>
-                    </div>
-                    <div className="rounded-md bg-white p-4">
-                      <dt className="text-xs font-semibold text-zinc-500">
                         실제 발주면적
                       </dt>
                       <dd className="mt-2 text-lg font-bold text-zinc-950">
@@ -1374,14 +1368,6 @@ export default function Home() {
                       <p className="mt-2 text-xs font-semibold text-zinc-500">
                         실제 발주 박스 × 박스당 면적입니다.
                       </p>
-                    </div>
-                    <div className="rounded-md bg-white p-4">
-                      <dt className="text-xs font-semibold text-zinc-500">
-                        박스당 수량
-                      </dt>
-                      <dd className="mt-2 text-lg font-bold text-zinc-950">
-                        {calculationTileSpec.boxTiles}장
-                      </dd>
                     </div>
                   </>
                 ) : null}
@@ -1414,14 +1400,6 @@ export default function Home() {
                   <p className="mt-2 text-xs font-semibold text-zinc-500">
                     시공면적에 선택한 로스율을 더한 값입니다.
                   </p>
-                </div>
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    필요 타일 수량(장)
-                  </dt>
-                  <dd className="mt-2 text-lg font-bold text-zinc-950">
-                    {calculationResult.requiredTiles}장
-                  </dd>
                 </div>
               </dl>
             ) : isResultStale ? (
@@ -1597,7 +1575,7 @@ export default function Home() {
                 </div>
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
                   <dt className="text-sm font-semibold text-zinc-500">
-                    발주박스
+                    실제 발주 박스
                   </dt>
                   <dd className="text-sm font-bold text-zinc-950">
                     {orderBoxes}박스
@@ -1605,10 +1583,10 @@ export default function Home() {
                 </div>
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
                   <dt className="text-sm font-semibold text-zinc-500">
-                    총발주수량
+                    추천 박스
                   </dt>
                   <dd className="text-sm font-bold text-zinc-950">
-                    {totalOrderQuantity}장
+                    {calculationResult.requiredBoxes}박스
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
@@ -1671,8 +1649,8 @@ export default function Home() {
                         </h3>
                         <p className="mt-1 text-sm text-zinc-500">
                           {calculation.constructionMethod} ·{" "}
-                          발주박스 {calculation.requiredBoxes}박스 · 총발주수량{" "}
-                          {calculation.totalOrderQuantity}장
+                          발주박스 {calculation.requiredBoxes}박스 · 실제발주면적{" "}
+                          {getSavedActualOrderArea(calculation).toFixed(2)}㎡
                         </p>
                       </div>
                       <div className="flex gap-2">
@@ -1746,18 +1724,20 @@ export default function Home() {
                       </div>
                       <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
                         <dt className="text-sm font-semibold text-zinc-500">
-                          총발주수량
-                        </dt>
-                        <dd className="text-sm font-bold text-zinc-950">
-                          {calculation.totalOrderQuantity}장
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
-                        <dt className="text-sm font-semibold text-zinc-500">
                           실제발주면적
                         </dt>
                         <dd className="text-sm font-bold text-zinc-950">
                           {getSavedActualOrderArea(calculation).toFixed(2)}㎡
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
+                        <dt className="text-sm font-semibold text-zinc-500">
+                          추천박스
+                        </dt>
+                        <dd className="text-sm font-bold text-zinc-950">
+                          {calculation.recommendedBoxes ??
+                            calculation.requiredBoxes}
+                          박스
                         </dd>
                       </div>
                       <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
@@ -1779,7 +1759,7 @@ export default function Home() {
               <div className="mt-5 grid gap-3 rounded-md border border-sky-200 bg-sky-50 p-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm font-semibold text-sky-700">
-                    총 박스 수량
+                    총 발주 박스
                   </p>
                   <p className="mt-2 text-2xl font-bold text-zinc-950">
                     {savedTotalBoxes}박스
@@ -1787,10 +1767,10 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-sky-700">
-                    총 발주 수량
+                    총 실제발주면적
                   </p>
                   <p className="mt-2 text-2xl font-bold text-zinc-950">
-                    {savedTotalOrderQuantity}장
+                    {formatSquareMeter(savedTotalActualOrderArea)}㎡
                   </p>
                 </div>
               </div>
