@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const workAreas = ["욕실", "주방벽", "베란다", "걸레받이", "기타"] as const;
+const workAreas = ["욕실", "주방벽", "베란다", "기타"] as const;
 
 const wallTileSizes = [
   "300×300",
@@ -47,6 +47,7 @@ type WorkArea = (typeof workAreas)[number];
 type TileSize = (typeof wallTileSizes)[number];
 type TileKind = "벽타일" | "바닥타일";
 type InputMethod = "면적 입력" | "치수 입력" | "길이 입력";
+type BaseboardOption = "없음" | "있음";
 type LossRate = (typeof lossRates)[number];
 type TileManufacturer = (typeof tileManufacturers)[number];
 type ConstructionMethod = (typeof constructionMethods)[number];
@@ -73,6 +74,8 @@ type InputError =
   | "width"
   | "height"
   | "length"
+  | "balconyBaseboardLength"
+  | "balconyBaseboardHeight"
   | "customTileWidth"
   | "customTileHeight"
   | "customBoxTiles";
@@ -90,6 +93,9 @@ type SavedCalculation = {
   widthMillimeter: string;
   heightMillimeter: string;
   lengthMillimeter: string;
+  balconyBaseboardOption: BaseboardOption;
+  balconyBaseboardLengthMillimeter: string;
+  balconyBaseboardHeightMillimeter: string;
   customTileWidthMillimeter: string;
   customTileHeightMillimeter: string;
   customBoxTiles: string;
@@ -170,10 +176,6 @@ function getDefaultInputMethod(area: WorkArea): InputMethod {
     return "치수 입력";
   }
 
-  if (area === "걸레받이") {
-    return "길이 입력";
-  }
-
   return "면적 입력";
 }
 
@@ -189,6 +191,12 @@ function parseInputValue(value: string) {
 
 function isValidPositiveInput(value: string) {
   return value.trim() !== "" && parseInputValue(value) > 0;
+}
+
+function isValidBaseboardHeightInput(value: string) {
+  const height = parseInputValue(value);
+
+  return value.trim() !== "" && height >= 100 && height <= 300;
 }
 
 function formatSquareMeter(value: number) {
@@ -215,6 +223,12 @@ export default function Home() {
   const [widthMillimeter, setWidthMillimeter] = useState("");
   const [heightMillimeter, setHeightMillimeter] = useState("");
   const [lengthMillimeter, setLengthMillimeter] = useState("");
+  const [selectedBalconyBaseboard, setSelectedBalconyBaseboard] =
+    useState<BaseboardOption>("없음");
+  const [balconyBaseboardLengthMillimeter, setBalconyBaseboardLengthMillimeter] =
+    useState("");
+  const [balconyBaseboardHeightMillimeter, setBalconyBaseboardHeightMillimeter] =
+    useState("100");
   const [customTileWidthMillimeter, setCustomTileWidthMillimeter] = useState("");
   const [customTileHeightMillimeter, setCustomTileHeightMillimeter] = useState("");
   const [customBoxTiles, setCustomBoxTiles] = useState("");
@@ -238,6 +252,17 @@ export default function Home() {
   const customTileWidth = parseInputValue(customTileWidthMillimeter);
   const customTileHeight = parseInputValue(customTileHeightMillimeter);
   const customBoxTileCount = parseInputValue(customBoxTiles);
+  const balconyBaseboardIncluded =
+    selectedArea === "베란다" && selectedBalconyBaseboard === "있음";
+  const balconyBaseboardLength = parseInputValue(
+    balconyBaseboardLengthMillimeter,
+  );
+  const balconyBaseboardHeight = parseInputValue(
+    balconyBaseboardHeightMillimeter,
+  );
+  const balconyBaseboardArea = balconyBaseboardIncluded
+    ? (balconyBaseboardLength * balconyBaseboardHeight) / 1_000_000
+    : 0;
   const customTileDisplayName =
     selectedTileSize === "직접입력" &&
     isValidPositiveInput(customTileWidthMillimeter) &&
@@ -482,6 +507,21 @@ export default function Home() {
     return savedTileSpec ? calculation.requiredBoxes * savedTileSpec.boxArea : 0;
   }
 
+  function getSavedBalconyBaseboardArea(calculation: SavedCalculation) {
+    if (
+      calculation.workArea !== "베란다" ||
+      calculation.balconyBaseboardOption !== "있음"
+    ) {
+      return 0;
+    }
+
+    return (
+      (parseInputValue(calculation.balconyBaseboardLengthMillimeter ?? "") *
+        parseInputValue(calculation.balconyBaseboardHeightMillimeter ?? "")) /
+      1_000_000
+    );
+  }
+
   function handleOrderBoxesChange(value: string) {
     if (!calculationResult) {
       return;
@@ -499,6 +539,10 @@ export default function Home() {
     resetCalculationResult();
     setSelectedArea(area);
     setInputMethod(getDefaultInputMethod(area));
+
+    if (area !== "베란다") {
+      setSelectedBalconyBaseboard("없음");
+    }
   }
 
   function handleManufacturerSelect(manufacturer: TileManufacturer) {
@@ -542,9 +586,20 @@ export default function Home() {
           : isValidPositiveInput(lengthMillimeter)
             ? []
             : ["length"];
+    const balconyBaseboardInputErrors: InputError[] = balconyBaseboardIncluded
+      ? [
+          ...(isValidPositiveInput(balconyBaseboardLengthMillimeter)
+            ? []
+            : ["balconyBaseboardLength" as const]),
+          ...(isValidBaseboardHeightInput(balconyBaseboardHeightMillimeter)
+            ? []
+            : ["balconyBaseboardHeight" as const]),
+        ]
+      : [];
     const nextInputErrors: InputError[] = [
       ...tileSpecErrors,
       ...areaInputErrors,
+      ...balconyBaseboardInputErrors,
     ];
 
     if (nextInputErrors.length > 0) {
@@ -566,12 +621,13 @@ export default function Home() {
     const height = parseInputValue(heightMillimeter);
     const area = parseInputValue(areaSquareMeter);
     const length = parseInputValue(lengthMillimeter);
-    const constructionArea =
+    const baseConstructionArea =
       inputMethod === "면적 입력"
         ? area
         : inputMethod === "치수 입력"
           ? (width * height) / 1_000_000
           : (length * calculationTileSpec.height) / 1_000_000;
+    const constructionArea = baseConstructionArea + balconyBaseboardArea;
     const lossRate = parseInputValue(selectedLossRate.replace("%", "")) / 100;
     const lossAppliedArea = constructionArea * (1 + lossRate);
     const requiredBoxes = Math.ceil(lossAppliedArea / calculationTileSpec.boxArea);
@@ -601,6 +657,15 @@ export default function Home() {
         `타일규격: ${selectedTileDisplayName}`,
         `시공기준: ${selectedConstructionMethod}`,
         `시공면적: ${calculationResult.constructionArea.toFixed(2)}㎡`,
+        ...(balconyBaseboardIncluded
+          ? [
+              "",
+              "하부 걸레받이 타일",
+              `길이: ${formatTileDimension(balconyBaseboardLength)}mm`,
+              `높이: ${formatTileDimension(balconyBaseboardHeight)}mm`,
+              `면적: ${formatSquareMeter(balconyBaseboardArea)}㎡`,
+            ]
+          : []),
         `로스적용면적: ${calculationResult.lossAppliedArea.toFixed(2)}㎡`,
         "",
         "부자재 참고 계산",
@@ -638,6 +703,22 @@ export default function Home() {
             `   타일규격: ${getSavedTileDisplayName(calculation)}`,
             `   시공기준: ${calculation.constructionMethod}`,
             `   시공면적: ${formatSquareMeter(calculation.constructionArea)}㎡`,
+            ...(calculation.workArea === "베란다" &&
+            calculation.balconyBaseboardOption === "있음"
+              ? [
+                  `   하부 걸레받이: 길이 ${formatTileDimension(
+                    parseInputValue(
+                      calculation.balconyBaseboardLengthMillimeter ?? "",
+                    ),
+                  )}mm / 높이 ${formatTileDimension(
+                    parseInputValue(
+                      calculation.balconyBaseboardHeightMillimeter ?? "",
+                    ),
+                  )}mm / 면적 ${formatSquareMeter(
+                    getSavedBalconyBaseboardArea(calculation),
+                  )}㎡`,
+                ]
+              : []),
             `   로스적용면적: ${formatSquareMeter(
               calculation.lossAppliedArea,
             )}㎡`,
@@ -727,6 +808,9 @@ export default function Home() {
           widthMillimeter,
           heightMillimeter,
           lengthMillimeter,
+          balconyBaseboardOption: selectedBalconyBaseboard,
+          balconyBaseboardLengthMillimeter,
+          balconyBaseboardHeightMillimeter,
           customTileWidthMillimeter,
           customTileHeightMillimeter,
           customBoxTiles,
@@ -761,6 +845,13 @@ export default function Home() {
     setWidthMillimeter(calculation.widthMillimeter);
     setHeightMillimeter(calculation.heightMillimeter);
     setLengthMillimeter(calculation.lengthMillimeter);
+    setSelectedBalconyBaseboard(calculation.balconyBaseboardOption ?? "없음");
+    setBalconyBaseboardLengthMillimeter(
+      calculation.balconyBaseboardLengthMillimeter ?? "",
+    );
+    setBalconyBaseboardHeightMillimeter(
+      calculation.balconyBaseboardHeightMillimeter ?? "100",
+    );
     setCustomTileWidthMillimeter(calculation.customTileWidthMillimeter);
     setCustomTileHeightMillimeter(calculation.customTileHeightMillimeter);
     setCustomBoxTiles(calculation.customBoxTiles);
@@ -1257,6 +1348,101 @@ export default function Home() {
               ) : null}
             </div>
           )}
+
+          {selectedArea === "베란다" ? (
+            <div className="mt-6 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-base font-bold text-zinc-900">
+                하부 걸레받이 타일
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:w-80">
+                {(["없음", "있음"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={getButtonClass(selectedBalconyBaseboard === option)}
+                    onClick={() => {
+                      resetCalculationResult();
+                      setSelectedBalconyBaseboard(option);
+
+                      if (
+                        option === "있음" &&
+                        balconyBaseboardHeightMillimeter.trim() === ""
+                      ) {
+                        setBalconyBaseboardHeightMillimeter("100");
+                      }
+                    }}
+                    aria-pressed={selectedBalconyBaseboard === option}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+
+              {selectedBalconyBaseboard === "있음" ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="balcony-baseboard-length"
+                      className="text-sm font-bold text-zinc-800"
+                    >
+                      하부 걸레받이 길이(mm)
+                    </label>
+                    <input
+                      id="balcony-baseboard-length"
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      value={balconyBaseboardLengthMillimeter}
+                      onChange={(event) => {
+                        resetCalculationResult();
+                        clearInputError("balconyBaseboardLength");
+                        setBalconyBaseboardLengthMillimeter(event.target.value);
+                      }}
+                      placeholder="예: 3000"
+                      className="mt-2 h-12 w-full rounded-md border border-zinc-200 bg-white px-4 text-base text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    />
+                    {inputErrors.includes("balconyBaseboardLength") ? (
+                      <p className="mt-2 text-sm font-semibold text-red-600">
+                        0보다 큰 값을 입력해주세요
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="balcony-baseboard-height"
+                      className="text-sm font-bold text-zinc-800"
+                    >
+                      하부 걸레받이 높이(mm)
+                    </label>
+                    <input
+                      id="balcony-baseboard-height"
+                      type="number"
+                      inputMode="numeric"
+                      min="100"
+                      max="300"
+                      value={balconyBaseboardHeightMillimeter}
+                      onChange={(event) => {
+                        resetCalculationResult();
+                        clearInputError("balconyBaseboardHeight");
+                        setBalconyBaseboardHeightMillimeter(event.target.value);
+                      }}
+                      placeholder="예: 100"
+                      className="mt-2 h-12 w-full rounded-md border border-zinc-200 bg-white px-4 text-base text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    />
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">
+                      높이는 100~300mm 범위를 권장합니다.
+                    </p>
+                    {inputErrors.includes("balconyBaseboardHeight") ? (
+                      <p className="mt-2 text-sm font-semibold text-red-600">
+                        100~300mm 범위로 입력해주세요
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm sm:p-7">
@@ -1565,6 +1751,18 @@ export default function Home() {
                     {calculationResult.constructionArea.toFixed(2)}㎡
                   </dd>
                 </div>
+                {balconyBaseboardIncluded ? (
+                  <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                    <dt className="text-sm font-semibold text-zinc-500">
+                      하부 걸레받이
+                    </dt>
+                    <dd className="text-right text-sm font-bold text-zinc-950">
+                      {formatTileDimension(balconyBaseboardLength)}×
+                      {formatTileDimension(balconyBaseboardHeight)}mm / {" "}
+                      {formatSquareMeter(balconyBaseboardArea)}㎡
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
                   <dt className="text-sm font-semibold text-zinc-500">
                     로스적용면적
@@ -1740,6 +1938,31 @@ export default function Home() {
                           박스
                         </dd>
                       </div>
+                      {calculation.workArea === "베란다" &&
+                      calculation.balconyBaseboardOption === "있음" ? (
+                        <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
+                          <dt className="text-sm font-semibold text-zinc-500">
+                            하부 걸레받이
+                          </dt>
+                          <dd className="text-right text-sm font-bold text-zinc-950">
+                            {formatTileDimension(
+                              parseInputValue(
+                                calculation.balconyBaseboardLengthMillimeter ?? "",
+                              ),
+                            )}
+                            ×
+                            {formatTileDimension(
+                              parseInputValue(
+                                calculation.balconyBaseboardHeightMillimeter ?? "",
+                              ),
+                            )}
+                            mm / {formatSquareMeter(
+                              getSavedBalconyBaseboardArea(calculation),
+                            )}
+                            ㎡
+                          </dd>
+                        </div>
+                      ) : null}
                       <div className="flex justify-between gap-4 rounded-md bg-white px-4 py-3">
                         <dt className="text-sm font-semibold text-zinc-500">
                           세라픽스
