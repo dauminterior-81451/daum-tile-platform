@@ -16,8 +16,6 @@ const wallTileSizes = [
 
 const lossRates = ["5%", "10%", "15%", "20%"] as const;
 
-const tileManufacturers = ["기본", "동화", "윤현", "대보", "기타"] as const;
-
 const constructionMethods = ["철거", "덧방"] as const;
 
 const adhesiveRates = {
@@ -49,7 +47,7 @@ type TileKind = "벽타일" | "바닥타일";
 type InputMethod = "면적 입력" | "치수 입력" | "길이 입력";
 type BaseboardOption = "없음" | "있음";
 type LossRate = (typeof lossRates)[number];
-type TileManufacturer = (typeof tileManufacturers)[number];
+type TileManufacturer = "기본" | "동화" | "윤현" | "대보" | "기타";
 type ConstructionMethod = (typeof constructionMethods)[number];
 type RegisteredTileSize = Exclude<TileSize, "직접입력">;
 
@@ -154,14 +152,6 @@ const tileSpecs: Record<RegisteredTileSize, TileSpec> = {
   },
 };
 
-const manufacturerTileSizes: Record<TileManufacturer, readonly TileSize[]> = {
-  기본: wallTileSizes,
-  동화: ["300×300", "300×600", "600×600", "600×1200", "800×800"],
-  윤현: ["600×600", "600×1200", "800×800"],
-  대보: ["300×300", "300×600", "600×600", "600×1200", "900×900"],
-  기타: wallTileSizes,
-};
-
 function getButtonClass(isActive: boolean) {
   return [
     "min-h-12 rounded-md border px-4 py-3 text-sm font-semibold transition-colors sm:text-base",
@@ -246,7 +236,7 @@ export default function Home() {
 
   const selectedTileSize =
     selectedTileKind === "벽타일" ? selectedWallTile : selectedFloorTile;
-  const availableTileSizes = manufacturerTileSizes[selectedTileManufacturer];
+  const availableTileSizes = wallTileSizes;
   const selectedTileSpec =
     selectedTileSize === "직접입력" ? null : tileSpecs[selectedTileSize];
   const customTileWidth = parseInputValue(customTileWidthMillimeter);
@@ -542,17 +532,6 @@ export default function Home() {
 
     if (area !== "베란다") {
       setSelectedBalconyBaseboard("없음");
-    }
-  }
-
-  function handleManufacturerSelect(manufacturer: TileManufacturer) {
-    resetCalculationResult();
-    setSelectedTileManufacturer(manufacturer);
-
-    const nextTileSizes = manufacturerTileSizes[manufacturer];
-
-    if (!nextTileSizes.includes(selectedTileSize)) {
-      setSelectedTileSize(nextTileSizes[0]);
     }
   }
 
@@ -969,26 +948,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="mt-6">
-            <p className="text-base font-bold text-zinc-900">제조사</p>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {tileManufacturers.map((manufacturer) => (
-                <button
-                  key={manufacturer}
-                  type="button"
-                  className={getButtonClass(
-                    selectedTileManufacturer === manufacturer,
-                  )}
-                  onClick={() => handleManufacturerSelect(manufacturer)}
-                  aria-pressed={selectedTileManufacturer === manufacturer}
-                >
-                  {manufacturer}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-6">
+          <div className="mt-5">
             <p className="text-base font-bold text-zinc-900">{selectedTileKind}</p>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {availableTileSizes.map(
