@@ -398,19 +398,16 @@ export default function Home() {
     constructionArea: number,
   ) {
     return [
-      `${constructionMethod} 벽 접착제`,
       `${adhesiveRates.dryFix.name}: ${getMethodAccessoryQuantity(
         constructionMethod,
         constructionArea,
         adhesiveRates.dryFix,
       )}`,
-      `또는 ${adhesiveRates.epoxy.name}: ${getMethodAccessoryQuantity(
+      `${adhesiveRates.epoxy.name}: ${getMethodAccessoryQuantity(
         constructionMethod,
         constructionArea,
         adhesiveRates.epoxy,
       )}`,
-      "",
-      "공통 부자재",
       ...commonAccessoryRates.map(
         (accessory) =>
           `${accessory.name}: ${getAccessoryQuantity(constructionArea, accessory)}`,
@@ -628,14 +625,14 @@ export default function Home() {
 
     try {
       const orderSummary = [
-        `발주박스: ${orderBoxes}박스`,
-        `추천박스: ${calculationResult.requiredBoxes}박스`,
-        `실제발주면적: ${actualOrderArea.toFixed(2)}㎡`,
+        "[타일 자재 발주]",
         "",
         `시공부위: ${selectedArea}`,
         `타일규격: ${selectedTileDisplayName}`,
         `시공기준: ${selectedConstructionMethod}`,
-        `시공면적: ${calculationResult.constructionArea.toFixed(2)}㎡`,
+        `수량: ${orderBoxes}박스`,
+        `총장수: ${totalOrderQuantity}장`,
+        `실제발주면적: ${actualOrderArea.toFixed(2)}㎡`,
         ...(balconyBaseboardIncluded
           ? [
               "",
@@ -645,9 +642,8 @@ export default function Home() {
               `면적: ${formatSquareMeter(balconyBaseboardArea)}㎡`,
             ]
           : []),
-        `로스적용면적: ${calculationResult.lossAppliedArea.toFixed(2)}㎡`,
         "",
-        "부자재 참고 계산",
+        "[부자재 참고]",
         ...getAccessorySummaryLines(
           selectedConstructionMethod,
           calculationResult.constructionArea,
@@ -671,41 +667,52 @@ export default function Home() {
     }
 
     try {
-      const savedOrderItems = savedCalculations.map(
-        (calculation, index) =>
-          [
-            `${index + 1}. 발주박스: ${calculation.requiredBoxes}박스`,
-            `   실제발주면적: ${formatSquareMeter(
-              getSavedActualOrderArea(calculation),
-            )}㎡`,
-            `   시공부위: ${calculation.workArea}`,
-            `   타일규격: ${getSavedTileDisplayName(calculation)}`,
-            `   시공기준: ${calculation.constructionMethod}`,
-            `   시공면적: ${formatSquareMeter(calculation.constructionArea)}㎡`,
-            ...(calculation.workArea === "베란다" &&
-            calculation.balconyBaseboardOption === "있음"
-              ? [
-                  `   하부 걸레받이: 길이 ${formatTileDimension(
-                    parseInputValue(
-                      calculation.balconyBaseboardLengthMillimeter ?? "",
-                    ),
-                  )}mm / 높이 ${formatTileDimension(
-                    parseInputValue(
-                      calculation.balconyBaseboardHeightMillimeter ?? "",
-                    ),
-                  )}mm / 면적 ${formatSquareMeter(
-                    getSavedBalconyBaseboardArea(calculation),
-                  )}㎡`,
-                ]
-              : []),
-            `   로스적용면적: ${formatSquareMeter(
-              calculation.lossAppliedArea,
-            )}㎡`,
-            `   세라픽스: ${getCerafixDisplay(
-              calculation.constructionMethod,
-              calculation.constructionArea,
-            )}`,
-          ].join("\n"),
+      const savedOrderItems = savedCalculations.map((calculation, index) => {
+        const savedTileSpec = getSavedTileSpec(calculation);
+        const savedTotalOrderQuantity =
+          calculation.totalOrderQuantity ??
+          (savedTileSpec ? calculation.requiredBoxes * savedTileSpec.boxTiles : 0);
+
+        return [
+          `${index + 1}. 타일 자재 발주`,
+          `   시공부위: ${calculation.workArea}`,
+          `   타일규격: ${getSavedTileDisplayName(calculation)}`,
+          `   시공기준: ${calculation.constructionMethod}`,
+          `   수량: ${calculation.requiredBoxes}박스`,
+          `   총장수: ${savedTotalOrderQuantity}장`,
+          `   실제발주면적: ${formatSquareMeter(
+            getSavedActualOrderArea(calculation),
+          )}㎡`,
+          ...(calculation.workArea === "베란다" &&
+          calculation.balconyBaseboardOption === "있음"
+            ? [
+                `   하부 걸레받이: 길이 ${formatTileDimension(
+                  parseInputValue(
+                    calculation.balconyBaseboardLengthMillimeter ?? "",
+                  ),
+                )}mm / 높이 ${formatTileDimension(
+                  parseInputValue(
+                    calculation.balconyBaseboardHeightMillimeter ?? "",
+                  ),
+                )}mm / 면적 ${formatSquareMeter(
+                  getSavedBalconyBaseboardArea(calculation),
+                )}㎡`,
+              ]
+            : []),
+        ].join("\n");
+      });
+      const savedTotalOrderQuantity = savedCalculations.reduce(
+        (total, calculation) => {
+          const savedTileSpec = getSavedTileSpec(calculation);
+          const savedOrderQuantity =
+            calculation.totalOrderQuantity ??
+            (savedTileSpec
+              ? calculation.requiredBoxes * savedTileSpec.boxTiles
+              : 0);
+
+          return total + savedOrderQuantity;
+        },
+        0,
       );
       const accessorySummary = [
         `${adhesiveRates.dryFix.name}: ${getCombinedMethodAccessoryQuantity(
@@ -713,7 +720,7 @@ export default function Home() {
           savedOverlayConstructionArea,
           adhesiveRates.dryFix,
         )}`,
-        `또는 ${adhesiveRates.epoxy.name}: ${getCombinedMethodAccessoryQuantity(
+        `${adhesiveRates.epoxy.name}: ${getCombinedMethodAccessoryQuantity(
           savedDemolitionConstructionArea,
           savedOverlayConstructionArea,
           adhesiveRates.epoxy,
@@ -735,17 +742,18 @@ export default function Home() {
         }`,
       ];
       const savedOrderSummary = [
-        "[다움 타일 발주]",
+        "[타일 자재 발주]",
         "",
         savedOrderItems.join("\n\n"),
         "",
         "---",
         "",
-        `총 발주 박스: ${savedTotalBoxes}박스`,
+        "[전체 합계]",
+        `총수량: ${savedTotalBoxes}박스`,
+        `총장수: ${savedTotalOrderQuantity}장`,
         `총 실제발주면적: ${formatSquareMeter(savedTotalActualOrderArea)}㎡`,
         "",
-        "전체 부자재 요약",
-        "",
+        "[부자재 참고]",
         accessorySummary.join("\n"),
         "",
         "※ 저장된 계산 목록 전체 시공면적 기준",
