@@ -1451,103 +1451,130 @@ export default function Home() {
 
           <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
             {calculationResult ? (
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    실제 발주 박스
-                  </dt>
-                  <dd className="mt-2">
-                    <input
-                      id="order-boxes"
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      value={orderBoxes}
-                      onChange={(event) =>
-                        handleOrderBoxesChange(event.target.value)
-                      }
-                      className="h-11 w-full rounded-md border border-zinc-200 bg-white px-3 text-lg font-bold text-zinc-950 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                    />
-                  </dd>
-                  <p className="mt-2 text-xs font-semibold text-zinc-500">
-                    현장에서 최종 발주할 박스 수입니다.
-                  </p>
-                </div>
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    추천 박스
-                  </dt>
-                  <dd className="mt-2 text-lg font-bold text-zinc-950">
-                    {calculationResult.requiredBoxes}박스
-                  </dd>
-                  <p className="mt-2 text-xs font-semibold text-zinc-500">
-                    로스 적용 면적 기준 자동 계산값입니다.
-                  </p>
-                </div>
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    추천 대비 조정
-                  </dt>
-                  <dd
-                    className={[
-                      "mt-2 text-lg font-bold",
-                      orderBoxDifference === 0
-                        ? "text-zinc-950"
-                        : "text-sky-700",
-                    ].join(" ")}
-                  >
-                    {orderBoxDifferenceText}
-                  </dd>
-                  <p className="mt-2 text-xs font-semibold text-zinc-500">
-                    실제 발주 박스를 바꾸면 자동 반영됩니다.
-                  </p>
-                </div>
-                {calculationTileSpec ? (
-                  <>
-                    <div className="rounded-md bg-white p-4">
-                      <dt className="text-xs font-semibold text-zinc-500">
-                        실제 발주면적
+              <div className="grid gap-5">
+                <dl className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md border border-sky-200 bg-white p-4">
+                    <dt className="text-sm font-bold text-sky-700">
+                      타일 발주
+                    </dt>
+                    <dd className="mt-2 flex items-center gap-2">
+                      <input
+                        id="order-boxes"
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={orderBoxes}
+                        onChange={(event) =>
+                          handleOrderBoxesChange(event.target.value)
+                        }
+                        className="h-11 min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-3 text-2xl font-bold text-zinc-950 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+                      <span className="text-2xl font-bold text-zinc-950">
+                        박스
+                      </span>
+                    </dd>
+                    <p className="mt-2 text-xs font-semibold text-zinc-500">
+                      거래처에 최종 발주할 박스 수입니다.
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-white p-4">
+                    <dt className="text-sm font-bold text-zinc-700">
+                      총 장수
+                    </dt>
+                    <dd className="mt-2 text-2xl font-bold text-zinc-950">
+                      {totalOrderQuantity}장
+                    </dd>
+                    <p className="mt-2 text-xs font-semibold text-zinc-500">
+                      타일 발주 박스 × 박스당 장수입니다.
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-white p-4">
+                    <dt className="text-sm font-bold text-zinc-700">
+                      실제 발주 면적
+                    </dt>
+                    <dd className="mt-2 text-2xl font-bold text-zinc-950">
+                      {actualOrderArea.toFixed(2)}㎡
+                    </dd>
+                    <p className="mt-2 text-xs font-semibold text-zinc-500">
+                      타일 발주 박스 × 박스당 면적입니다.
+                    </p>
+                  </div>
+                </dl>
+
+                <div className="rounded-md border border-zinc-200 bg-white p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-sm font-bold text-zinc-900">
+                      상세 계산 정보
+                    </h3>
+                    <p
+                      className={[
+                        "text-sm font-bold",
+                        orderBoxDifference === 0
+                          ? "text-zinc-500"
+                          : "text-sky-700",
+                      ].join(" ")}
+                    >
+                      추천 {calculationResult.requiredBoxes}박스 ·{" "}
+                      {orderBoxDifferenceText}
+                    </p>
+                  </div>
+
+                  <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                      <dt className="text-sm font-semibold text-zinc-500">
+                        시공 면적
                       </dt>
-                      <dd className="mt-2 text-lg font-bold text-zinc-950">
-                        {actualOrderArea.toFixed(2)}㎡
+                      <dd className="text-sm font-bold text-zinc-950">
+                        {calculationResult.constructionArea.toFixed(2)}㎡
                       </dd>
-                      <p className="mt-2 text-xs font-semibold text-zinc-500">
-                        실제 발주 박스 × 박스당 면적입니다.
-                      </p>
                     </div>
-                  </>
-                ) : null}
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    타일규격
-                  </dt>
-                  <dd className="mt-2 text-lg font-bold text-zinc-950">
-                    {selectedTileDisplayName}
-                  </dd>
+                    <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                      <dt className="text-sm font-semibold text-zinc-500">
+                        로스율
+                      </dt>
+                      <dd className="text-sm font-bold text-zinc-950">
+                        {selectedLossRate}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                      <dt className="text-sm font-semibold text-zinc-500">
+                        로스 적용 면적
+                      </dt>
+                      <dd className="text-sm font-bold text-zinc-950">
+                        {calculationResult.lossAppliedArea.toFixed(2)}㎡
+                      </dd>
+                    </div>
+                    {calculationTileSpec ? (
+                      <>
+                        <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                          <dt className="text-sm font-semibold text-zinc-500">
+                            타일 1장 면적
+                          </dt>
+                          <dd className="text-sm font-bold text-zinc-950">
+                            {formatSquareMeter(calculationTileSpec.tileArea)}㎡
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                          <dt className="text-sm font-semibold text-zinc-500">
+                            박스당 장수
+                          </dt>
+                          <dd className="text-sm font-bold text-zinc-950">
+                            {calculationTileSpec.boxTiles}장
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-4 rounded-md bg-zinc-50 px-4 py-3">
+                          <dt className="text-sm font-semibold text-zinc-500">
+                            박스당 면적
+                          </dt>
+                          <dd className="text-sm font-bold text-zinc-950">
+                            {formatSquareMeter(calculationTileSpec.boxArea)}㎡
+                          </dd>
+                        </div>
+                      </>
+                    ) : null}
+                  </dl>
                 </div>
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    시공면적
-                  </dt>
-                  <dd className="mt-2 text-lg font-bold text-zinc-950">
-                    {calculationResult.constructionArea.toFixed(2)}㎡
-                  </dd>
-                  <p className="mt-2 text-xs font-semibold text-zinc-500">
-                    현장 실제 시공 면적이며 부자재 계산 기준입니다.
-                  </p>
-                </div>
-                <div className="rounded-md bg-white p-4">
-                  <dt className="text-xs font-semibold text-zinc-500">
-                    로스적용면적
-                  </dt>
-                  <dd className="mt-2 text-lg font-bold text-zinc-950">
-                    {calculationResult.lossAppliedArea.toFixed(2)}㎡
-                  </dd>
-                  <p className="mt-2 text-xs font-semibold text-zinc-500">
-                    시공면적에 선택한 로스율을 더한 값입니다.
-                  </p>
-                </div>
-              </dl>
+              </div>
             ) : isResultStale ? (
               <p className="text-sm leading-6 text-zinc-600">
                 입력값이 변경되었습니다.
