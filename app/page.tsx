@@ -233,6 +233,7 @@ export default function Home() {
   const [savedCalculations, setSavedCalculations] = useState<SavedCalculation[]>(
     [],
   );
+  const [isSavedListOpen, setIsSavedListOpen] = useState(false);
 
   const selectedTileSize =
     selectedTileKind === "벽타일" ? selectedWallTile : selectedFloorTile;
@@ -812,6 +813,7 @@ export default function Home() {
         },
       ];
     });
+    setIsSavedListOpen(true);
   }
 
   function handleEditSavedCalculation(calculation: SavedCalculation) {
@@ -1826,7 +1828,30 @@ export default function Home() {
             </div>
           </div>
 
-          {savedCalculations.length > 0 ? (
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => setIsSavedListOpen((currentValue) => !currentValue)}
+              disabled={savedCalculations.length === 0}
+              className={[
+                "h-12 rounded-md border px-5 text-base font-bold transition-colors sm:w-auto",
+                savedCalculations.length > 0
+                  ? "border-zinc-300 bg-white text-zinc-800 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                  : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400",
+              ].join(" ")}
+              aria-expanded={isSavedListOpen}
+            >
+              {isSavedListOpen
+                ? `저장된 계산 목록 접기 (${savedCalculations.length}개)`
+                : `저장된 계산 목록 보기 (${savedCalculations.length}개)`}
+            </button>
+          </div>
+
+          {savedCalculations.length === 0 ? (
+            <p className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">
+              저장된 계산 결과가 없습니다.
+            </p>
+          ) : isSavedListOpen ? (
             <>
               <div className="mt-5 grid gap-3">
                 {savedCalculations.map((calculation) => (
@@ -2072,11 +2097,7 @@ export default function Home() {
                 ) : null}
               </div>
             </>
-          ) : (
-            <p className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">
-              저장된 계산 결과가 없습니다.
-            </p>
-          )}
+          ) : null}
         </section>
       </section>
     </main>
